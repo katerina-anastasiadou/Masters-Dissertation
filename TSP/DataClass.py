@@ -24,9 +24,4 @@ class Data:
         self.loc = {i:(rnd.random()*self.width,rnd.random()*self.width) for i in self.V}
         self.c = {(i,j): math.hypot(self.loc[i][0]-self.loc[j][0],self.loc[i][1]-self.loc[j][1]) for (i,j) in self.E}
         self.a = {(i,j): 0.5*math.hypot(self.loc[i][0]-self.loc[j][0],self.loc[i][1]-self.loc[j][1]) for (i,j) in self.A}
-        
-        # self.V_prime = range(self.n)  # Include dummy vertex
-        # self.E_prime = [(i, j) for i in self.V_prime for j in self.V_prime if i > j]
-        # self.loc[self.n] = (self.width / 2, self.width / 2)  # Dummy vertex in the center
-        # self.c_prime = {(i, j): math.hypot(self.loc[i][0] - self.loc[j][0], self.loc[i][1] - self.loc[j][1]) for (i, j) in self.E_prime}
-        
+       
