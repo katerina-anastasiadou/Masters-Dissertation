@@ -4,7 +4,7 @@ Created on Fri Jun  7 10:46:31 2024
 
 @author: katan
 """
-from helper import get_cutset, get_powerset, find_connected_components
+from helper import get_cutset, get_powerset, find_connected_components, get_edges
 from docplex.mp.model import Model
 
 class MyModel:
@@ -30,7 +30,21 @@ class MyModel:
             for i in data_input.V)
         
         # Ensure y[i, j] is less than or equal to y[j, j] for all i, j
-        self.model_instance.add_constraints(self.y[i,j] <= self.y[j,j] for i in data_input.V for j in data_input.V)
+        # self.model_instance.add_constraints(self.y[i,j] <= self.y[j,j] for i in data_input.V for j in data_input.V)
+        
+        # Additional constraint (12): x[i, j] + y[i, j] <= y[j, j] for all pairs of vertices i, j
+        # where S = {v_i, v_j} and S \ {v_1} is true
+        self.model_instance.add_constraints(
+            self.x[e] + self.y[i, j] <= self.y[j, j] 
+            for i in data_input.V for j in data_input.V for e in get_edges([i,j],data_input.E)
+            if i != 0 and j != 0 and i != j 
+        )
+        
+
+        # Constraint 13: x[0, i] <= y[i, i] for all vi in V \ {v1}
+        self.model_instance.add_constraints(
+            self.x[e] <= self.y[i, i] for i in data_input.V for e in get_edges([0,i],data_input.E) if i != 0
+        )
         
         # Assignment constraint: Each i must be assigned to exactly one j, except for i=0
         self.model_instance.add_constraints(
@@ -44,30 +58,6 @@ class MyModel:
         
         # Ensure y[0, 0] is 1
         self.model_instance.add_constraint(self.y[0,0] == 1)
-        
-        # Initial solve to get the solution
-        # self.solution = self.model_instance.solve(log_output=True)
-        # component_list = find_connected_components(self.model_instance, solution, data_input)
-
-        # while len(component_list) > 1:
-        #     for component in component_list:
-        #         # Connectivity constraint
-        #         self.model_instance.add_constraint(
-        #             self.model_instance.sum(self.x[i, j] for (i, j) in get_cutset(component, data_input.E)) >=
-        #             2 * self.model_instance.sum(self.y[i, j] for i in component for j in data_input.V if j not in component)
-        #         )
-
-        #     # Solve the model with updated constraints
-        #     solution = self.model_instance.solve(log_output=True)
-        #     component_list = find_connected_components(self.model_instance, solution, data_input)
-
-        #for S in get_powerset(data_input.V):
-        #    if len(S) > 1 and 1 not in S:
-        #        self.model_instance.add_constraint(
-        #            self.model_instance.sum(self.x[i,j] for (i,j) in get_cutset(S, data_input.E)) >=
-        #            2 * self.model_instance.sum(self.y[i,j] for i in S for j in data_input.V if j not in S))
-                
-        
         
         
         
