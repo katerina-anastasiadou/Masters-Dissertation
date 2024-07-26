@@ -79,9 +79,3 @@ def plot_sol(data,model):
     plt.grid()
     fig = plt.gcf()
     fig.set_size_inches(8, 8)
-    
-# Helper function to generate powerset
-def get_powerset(iterable):
-    from itertools import chain, combinations
-    s = list(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
