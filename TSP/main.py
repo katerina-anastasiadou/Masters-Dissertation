@@ -54,19 +54,19 @@ plot_sol(p,mdl)
 
 #%%
 
-# Initial solve to get the solution
-solution = mdl.solve(log_output=True)
-component_list = find_connected_components(solution, E, V)
-while len(component_list) > 1:
-    for component in component_list: 
-        mdl.add_constraint(mdl.sum(x[i,j] for (i,j) in get_cutset(component, E)) >= 2)
+# # Initial solve to get the solution
+# solution = mdl.solve(log_output=True)
+# component_list = find_connected_components(solution, E, V)
+# while len(component_list) > 1:
+#     for component in component_list: 
+#         mdl.add_constraint(mdl.sum(x[i,j] for (i,j) in get_cutset(component, E)) >= 2)
         
-    solution = mdl.solve(log_output=True)
+#     solution = mdl.solve(log_output=True)
     
-    # Find the connected components
-    component_list = find_connected_components(solution, E, V)
+#     # Find the connected components
+#     component_list = find_connected_components(solution, E, V)
 
-# Add the constraints for each component
+# # Add the constraints for each component
  
 
 
