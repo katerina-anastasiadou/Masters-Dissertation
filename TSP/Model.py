@@ -4,7 +4,7 @@ Created on Fri Jun  7 10:46:31 2024
 
 @author: katan
 """
-from helper import get_cutset, get_powerset, find_connected_components, get_edges
+from helper import get_cutset, find_connected_components, get_edges
 from docplex.mp.model import Model
 
 class MyModel:
