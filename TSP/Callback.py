@@ -41,8 +41,8 @@ class Callback_lazy(ConstraintCallbackMixin, LazyConstraintCallback):
         edges_in_solution = [(i, j) for (i, j) in self.problem_data.E if sol_x.get_value(self.mdl.x[i, j]) > 0.9]
         vertices = [i for i in self.problem_data.V if sol_y.get_value(self.mdl.y[i, i]) > 0.9]
  
-        print("Edges in solution:", edges_in_solution)
-        print("Vertices:", vertices)
+        # print("Edges in solution:", edges_in_solution)
+        # print("Vertices:", vertices)
 
         g = ig.Graph()
         g.add_vertices(max(vertices)+1)  # Adding the number of vertices
@@ -53,13 +53,13 @@ class Callback_lazy(ConstraintCallbackMixin, LazyConstraintCallback):
         
         # Extract the component membership list and adjust back to original IDs
         component_list = [list(comp) for comp in components]
-        print(component_list)
+        # print(component_list)
         
         if len(component_list) > 1 :
             for component in component_list:
                 # Connectivity constraint
                 if len(component) > 2 and 0 not in component:
-                    print("Adding cut for component:", component)
+                    # print("Adding cut for component:", component)
                     ct_cutset = self.mdl.model_instance.sum(self.mdl.x[i, j] for (i, j) in get_cutset(component, self.problem_data.E))
                     for i in component:
                        ct =  ct_cutset >= 2*self.mdl.model_instance.sum(self.mdl.y[i, j] for j in component)
@@ -99,10 +99,11 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
         vertices = [i for i in self.problem_data.V if sol_y.get_value(self.mdl.y[i, i]) > 0.000001]
         edges_map = map_edges(vertices, edges_in_solution)
         
-        print("Edges in solution:", edges_in_solution)
-        print("mapped Edges in solution:", edges_map)
-        print("Vertices:", vertices)
-
+        # print("Edges in solution:", edges_in_solution)
+        # print("mapped Edges in solution:", edges_map)
+        # print("Vertices:", vertices)
+        
+        # Connectivity constraints
         g = ig.Graph()
         g.add_vertices(vertices)
         g.add_edges(edges_map)
@@ -110,7 +111,7 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
         # Get the connected components
         components = g.connected_components(mode='weak')
         component_list = [list(comp) for comp in components]
-        print(component_list)
+        # print(component_list)
 
         if len(component_list) > 1:
             for component in component_list:
@@ -123,11 +124,11 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
                         ct_cpx = self.linear_ct_to_cplex(ct)
                         self.add(ct_cpx[0], ct_cpx[1], ct_cpx[2])                    
         else:
-            print('min cut here')
+            # print('min cut here')
             capacity = [max(1, sol_x.get_value(self.mdl.x[i, j])) for (i, j) in edges_in_solution]
             g.es["capacity"] = capacity
             cut = g.mincut()
-            print('run min cut')
+            # print('run min cut')
             g.add_vertex(self.problem_data.n)
             for v in vertices:
                 if v != 0:
@@ -137,7 +138,7 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
                         if sol_y.get_value(self.mdl.y[v, j]) > 0.000001:                            
                             dummy_edges.append((j,self.problem_data.n))
                             dummy_capacity.append(sol_y.get_value(self.mdl.y[v, j]))
-                    print('finished loop')
+                    # print('finished loop')
                     dummy_vertices = vertices + [self.problem_data.n]
                     edges_map_dummy = map_edges(dummy_vertices, dummy_edges)
                     #print(dummy_edges)
@@ -148,15 +149,15 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
                     cut = g.mincut(0, len(vertices))
                     value = cut.value
                     partition = cut.partition
-                    print("Value:", value)
-                    print("Partition:",  partition)
+                    # print("Value:", value)
+                    # print("Partition:",  partition)
                     g.delete_edges(edges_map_dummy)
                     if value < 2 * sol_y.get_value(self.mdl.y[v, v]):
-                         print('violated sec add cut')
+                         # print('violated sec add cut')
                          for component in partition:
-                             print("Component:", component)
+                             # print("Component:", component)
                              component_unmapped = [dummy_vertices[i] for i in component]
-                             print("Component unmapped:", component_unmapped)
+                             # print("Component unmapped:", component_unmapped)
                              if self.problem_data.n in component_unmapped:
                                 component_unmapped.remove(self.problem_data.n)
                              if len(component_unmapped) > 2 and 0 not in component_unmapped:
@@ -168,52 +169,54 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
                                  # solve a global min cut problem and if the value of the cut is less than 2 we have a violated cut
                                  
                                  
-        # call funtion
-        frac_edges = [(i, j) for (i, j) in self.problem_data.E if sol_x.get_value(self.mdl.x[i, j]) > 0.0000001 and sol_x.get_value(self.mdl.x[i, j]) < 0.999999]
+        # 2-matching inequalities      
         int_edges = [(i, j) for (i, j) in self.problem_data.E if sol_x.get_value(self.mdl.x[i, j]) >= 0.999999]
+                
+        G_star = ig.Graph()
         
-        print("Fractional edges:", frac_edges)
-        print("Integer edges:", int_edges)
+        E_star = [(i, j) for (i, j) in self.problem_data.E if sol_x.get_value(self.mdl.x[i, j]) > 0.0000001 and sol_x.get_value(self.mdl.x[i, j]) < 0.999999]
         
-        # for component in components:
-        #     for (i,j) in int_edges:
-        #         if i or j in component:
-        #             T.append(i,j)
-        # if T.size()/2
-        # Then add comb
+        V = set()
+        for (i,j) in E_star:
+            V.add(i)
+            V.add(j)
+        V = list(V)
+        print(f' V {V}')
+        print(f' E_star {E_star}')
+        edges_map = map_edges(V, E_star)
+        print(f' mapped edges {edges_map}')
+        G_star.add_vertices(V)
+        G_star.add_edges(edges_map)
+
+        # # Find connected components in G*
+        components_star = G_star.connected_components(mode='weak')
+        component_list_star = [list(comp) for comp in components_star]
+        print("Components in G*:", component_list_star)
         
-        for component in components:
-            component_unmapped = [vertices[i] for i in component]
-            # Initialize T for the current component
+        # Iterate over each component H in G*
+        for component in component_list_star:
+            component_unmapped = [V[i] for i in component]
             T = []
             for (i, j) in int_edges:
                 if i in component_unmapped or j in component_unmapped:
                     T.append((i, j))
-                    
-            print(f"Component: {component}")
-            print(f"Integer edges in component: {T}")
-            
-            
-            # Check if T is large enough to be a potential handle
-            if len(T) / 2 >= 1:  # Ensuring T has at least 2 edges to be valid
-                print("T is a potential handle. Checking combinations.")
-            
-                
-                # Construct the inequality: x(E(H)) + x(T) <= Σvi∈H yii + (|T| - 1)/2
-                edges_in_component = [(i, j) for (i, j) in self.problem_data.E if i in component_unmapped and j in component_unmapped]
-                #print(f"edges in component: {edges_in_component}")
-                
-                sum_x_EH = self.mdl.model_instance.sum(self.mdl.x[i, j] for (i, j) in edges_in_component)
+            print(T)
+            # Process each component
+            if len(component_unmapped) > 2 and len(T) % 2 == 1:
+                sum_x_EH = self.mdl.model_instance.sum(self.mdl.x[i, j] for (i, j) in self.problem_data.E if i in component_unmapped and j in component_unmapped)
                 sum_x_T = self.mdl.model_instance.sum(self.mdl.x[i, j] for (i, j) in T)
                 sum_y_H = self.mdl.model_instance.sum(self.mdl.y[i, i] for i in component_unmapped)
+                half_T_len = (len(T) - 1) / 2
+                inequality = sum_x_EH + sum_x_T <= sum_y_H + half_T_len
                 
-                inequality = sum_x_EH + sum_x_T <= sum_y_H + (len(T) - 1) / 2
+                # Blossom inequalities
+                # x_EH_T = self.mdl.model_instance.sum(self.mdl.x[i, j] for (i, j) in self.problem_data.E if i in component_unmapped and j in component_unmapped and (i, j) not in T)
+                # x_T = self.mdl.model_instance.sum(self.mdl.x[i, j] for (i, j) in T)
+                # inequality = x_EH_T + (len(T) - x_T) >= 1
                 
                 ct_cpx = self.linear_ct_to_cplex(inequality)
                 self.add(ct_cpx[0], ct_cpx[1], ct_cpx[2])
-                print(f"Added constraint: {inequality}")
-                # if int_edges != []:
-                #     exit()
+                print(f"Added 2-matching constraint: {inequality}")
 
 
 
