@@ -10,11 +10,18 @@ rnd = np.random
 import math
 
 class Data:
-    def __init__(self, n_input, width_input, seed_input):
+    def __init__(self, n_input, width_input, seed_input, demand_min=1, demand_max=10, capacity_factor=2):
+    #def __init__(self, n_input, width_input, seed_input, V, c, d, demand_min=1, demand_max=10, capacity_factor=2):
         
         self.n = n_input
         self.width = width_input
         self.seed = seed_input
+        self.demand_min = demand_min
+        self.demand_max = demand_max
+        self.capacity_factor = capacity_factor
+        # self.V = V
+        # self.c = c
+        # self.d = d
         
     def create_data(self):
         rnd.seed(self.seed)
@@ -24,4 +31,6 @@ class Data:
         self.loc = {i:(rnd.random()*self.width,rnd.random()*self.width) for i in self.V}
         self.c = {(i,j): math.hypot(self.loc[i][0]-self.loc[j][0],self.loc[i][1]-self.loc[j][1]) for (i,j) in self.E}
         self.a = {(i,j): 0.5*math.hypot(self.loc[i][0]-self.loc[j][0],self.loc[i][1]-self.loc[j][1]) for (i,j) in self.A}
-       
+        self.demand = {i: np.random.randint(self.demand_min, self.demand_max + 1) for i in self.V}
+        self.Qmax = self.capacity_factor * sum(self.demand.values()) / self.n
+        #self.Qmax = 15
