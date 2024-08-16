@@ -23,10 +23,10 @@ def calculate_percent_lb(solution, cb_user):
     lb = cb_user.lb
         
     if lb is None:
-        raise ValueError("Lower bound (lb) is not set.")
+        raise ValueError("Lower bound (LB) is not set.")
     
     if optimal_value == 0:
-        raise ValueError("Optimal value is zero, cannot compute percent_lb.")
+        raise ValueError("Optimal value is zero, cannot compute %_LB.")
     
     percent_lb = (lb / optimal_value) * 100
     return percent_lb
@@ -36,10 +36,10 @@ def calculate_percent_ub(solution, cb_user):
     ub = cb_user.ub
 
     if ub is None:
-        raise ValueError("Upper bound (ub) is not set.")
+        raise ValueError("Upper bound (UB) is not set.")
     
     if optimal_value == 0:
-        raise ValueError("Optimal value is zero, cannot compute percent_ub.")
+        raise ValueError("Optimal value is zero, cannot compute %_UB.")
     
     percent_ub = (ub / optimal_value) * 100
     return percent_ub
@@ -48,9 +48,9 @@ n = 40
 dataset = 1
 width = 100
 
-V_values = [100]#, 75]#, 100]#, 125, 150, 175, 200]
-alpha_values = [3]#, 5, 7, 9]
-num_instances = 10
+V_values = [50, 75]#, 100]#, 125, 150, 175, 200]
+alpha_values = [3, 5, 7, 9]
+num_instances = 3#10
 
 results = []
 
@@ -62,14 +62,13 @@ for V in V_values:
             'succ': 0,
             'p_star': 0,
             'opt': 0,
-            # 'h_time': 0,
             '%_LB': 0,
             '%_UB': 0,
             'sec': 0,
             '2mat': 0,
             'cover': 0,
             'nodes': 0,
-            # 'time': 0
+            'time': 0
         }
         
         for i in range(num_instances):
@@ -111,14 +110,13 @@ for V in V_values:
                     'succ': 1 if solution else 0,
                     'p_star': None,
                     'opt': None,
-                    # 'h_time': h_time,
                     '%_LB': None,
                     '%_UB': None,
                     'sec': None,
                     '2mat': None,
                     'cover': None,
                     'nodes': None,
-                    # 'time': total_computing_time,
+                    'time': None,
                 }
     
                 if solution:
@@ -129,12 +127,12 @@ for V in V_values:
                     #stats['%_UB'] = calculate_percent_ub(solution, cb_user)
                     
                     try:
-                        stats['percent_lb'] = calculate_percent_lb(solution, cb_user)
+                        stats['%_LB'] = calculate_percent_lb(solution, cb_user)
                     except ValueError as e:
                         print(f"Warning: {e}")
                         
                     try:
-                        stats['percent_ub'] = calculate_percent_ub(solution, cb_user)
+                        stats['%_UB'] = calculate_percent_ub(solution, cb_user)
                     except ValueError as e:
                         print(f"Warning: {e}")
                     
@@ -142,23 +140,22 @@ for V in V_values:
                     stats['2mat'] = cb_user.mat2
                     stats['cover'] = cb_user.cover
                     stats['nodes'] = cb_user.nodes
+                    stats['time'] = cb_lazy.total_time + cb_user.total_time
                 
                 # Plot the solution
-                if i == 1:
-                    plot_sol(p,mdl)
+                # plot_sol(p,mdl)
                 
                 # Accumulate the results
                 summary_stats['succ'] += stats.get('succ', 0)
                 summary_stats['p_star'] += stats.get('p_star', 0)
                 summary_stats['opt'] += stats.get('opt', 0)
-                # summary_stats['h_time'] += stats.get('h_time', 0)
                 summary_stats['%_LB'] += stats.get('%_LB', 0)
                 summary_stats['%_UB'] += stats.get('%_UB', 0)
                 summary_stats['sec'] += stats.get('sec', 0)
                 summary_stats['2mat'] += stats.get('2mat', 0)
                 summary_stats['cover'] += stats.get('cover', 0)
                 summary_stats['nodes'] += stats.get('nodes', 0)
-                # summary_stats['time'] += stats.get('time', 0)
+                summary_stats['time'] += stats.get('time', 0)
                 
             except Exception as e:
                 print(f"Error occurred in instance {i} with V={V} and alpha={alpha}: {e}")
@@ -180,8 +177,21 @@ df_results = pd.DataFrame(results)
 overall_average = df_results.groupby('alpha').mean().reset_index()
 overall_average['V'] = 'Averages'
 
-# Append overall averages to the results
-df_final = pd.concat([df_results, overall_average], ignore_index=True)
+# Loop through unique V values
+for v_value in df_results['V'].unique():
+    # Filter data for the current V
+    df_v = df_results[df_results['V'] == v_value]
+
+    # Compute the average for this V and add it to the bottom of this block
+    average_v = df_v.mean(numeric_only=True).to_frame().T
+    average_v['V'] = f'Average {v_value}'
+    
+    # Concatenate the block with its average
+    block = pd.concat([df_v, average_v], ignore_index=True)
+    
+    # Add a separator row (empty) if needed
+    separator = pd.DataFrame(columns=df_results.columns)
+    df_final = pd.concat([df_final, block, separator], ignore_index=True)
 
 # Append overall averages to the results
 df_final = pd.concat([df_results, overall_average], ignore_index=True)
