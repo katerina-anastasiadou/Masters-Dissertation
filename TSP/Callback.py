@@ -9,6 +9,7 @@ from docplex.mp.callbacks.cb_mixin import ConstraintCallbackMixin
 from helper import *
 import igraph as ig
 from itertools import combinations
+import time
 
 class Callback_lazy(ConstraintCallbackMixin, LazyConstraintCallback):
     def __init__(self, env):
@@ -27,17 +28,11 @@ class Callback_lazy(ConstraintCallbackMixin, LazyConstraintCallback):
         ConstraintCallbackMixin.__init__(self)
         
         self.visited_vertices = set()  # Initialize an empty set to store visited vertices
-        
-        # Initialize LP relaxation value
-        self.lp_relaxation_root = None
 
         # Initialize the counters for constraints
-        self.pair = 0
         self.sec = 0
-        self.mat2 = 0
-        
-        # Initialize a counter for nodes explored
-        self.nodes_explored = 0
+
+        self.total_time = 0  # To accumulate total computation time
         
     def __call__(self):
         """
@@ -46,8 +41,8 @@ class Callback_lazy(ConstraintCallbackMixin, LazyConstraintCallback):
         Returns:
             None
         """        
-        # Increment the node counter
-        self.nodes_explored += 1
+        
+        start_time = self.get_time()  # Start time
         
         print('running lazy callback')
         self.num_calls += 1        
@@ -87,10 +82,19 @@ class Callback_lazy(ConstraintCallbackMixin, LazyConstraintCallback):
                        self.sec += 1  # Increment sec counter
                        
                        
+        # End of callback logic
+        end_time = self.get_time()  # End time
+        elapsed_time = end_time - start_time
+        self.total_time += elapsed_time  # Accumulate time
+
+        # print(f'Lazy callback execution time: {elapsed_time:.4f} seconds')
+        # print(f'Total time in lazy callback so far: {self.total_time:.4f} seconds')
+                       
+                       
 class Callback_user(ConstraintCallbackMixin, UserCutCallback):
     def __init__(self, env):
         """
-        Initializes the Callback_lazy class.
+        Initializes the Callback_user class.
 
         Args:
             model_instance: The CPLEX model instance.
@@ -105,17 +109,18 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
         
         self.visited_vertices = set()  # Initialize an empty set to store visited vertices
         
-        self.nodes = 0
+        self.min_gap = 0
         self.lb = 0
         self.ub = 0
 
         # Initialize counters
-        self.pair = 0
         self.sec = 0
         self.mat2 = 0
+        self.cover = 0
         
-        # Initialize a counter for nodes explored
-        self.nodes_explored = 0
+        self.total_nodes_examined = 0  # Variable to track the total number of nodes examined
+
+        self.total_time = 0  # To accumulate total computation time
         
     def __call__(self):
         """
@@ -125,15 +130,18 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
             None
         """
         
+        start_time = self.get_time()  # Start time
+        
         if self.get_current_node_depth() == 0:
             self.mip_gap_root_node = self.get_MIP_relative_gap()
             print(f' mip gap {self.mip_gap_root_node}')
-            self.nodes = self.mip_gap_root_node
+            self.min_gap = self.mip_gap_root_node
             print(f' upper bound {self.get_incumbent_objective_value()}')
             self.ub = self.get_incumbent_objective_value()
             print(f' lower bound {self.get_best_objective_value()}') 
             self.lb = self.get_best_objective_value()
         
+        self.total_nodes_examined = self.get_num_nodes()
         
         print('running user callback')
         self.num_calls += 1
@@ -276,7 +284,47 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
                         int_edges.remove(edge)
                         
         
-        # Separation of cover inequalities      
+        # Separation of cover inequalities
+        
+        
+        # Iterate over each vertex j in V
+        # for j in self.problem_data.V:
+        #     # Step 1: Identify neighbors N where y*ij > 0
+        #     neighbors = [i for i in self.problem_data.V if sol_y.get_value(self.mdl.y[i, j]) > 0]
+            
+        #     # Step 2: Initialize variables for the heuristic
+        #     z = {i: 0 for i in neighbors}  # Initialize z_i variables to 0
+        #     max_obj = 0  # Initialize objective value
+        #     total_demand = 0  # Initialize total demand
+            
+        #     # Step 3: Sort neighbors by the heuristic criteria (e.g., non-increasing (1 - y*ij))
+        #     sorted_neighbors = sorted(neighbors, key=lambda i: (1 - sol_y.get_value(self.mdl.y[i, j])) / self.problem_data.demand[i], reverse=True)
+            
+        #     # Step 4: Greedily select items for the cover
+        #     for i in sorted_neighbors:
+        #         # Check the constraint: fi * z_i >= Qmax * yjj + epsilon
+        #         if self.problem_data.demand[i] >= self.problem_data.Qmax * sol_y.get_value(self.mdl.y[j, j]) + 1e-6:
+        #             z[i] = 1
+        #             total_demand += self.problem_data.demand[i]
+        #             max_obj += (1 - sol_y.get_value(self.mdl.y[i, j]))
+            
+        #     # Step 5: Check if the objective value is less than 1
+        #     if max_obj < 1:
+        #         # Define the violated cover set C = {i: z_i = 1}
+        #         C = [i for i in neighbors if z[i] == 1]
+        #         #print(f'cover: {C}')
+                
+        #         # Step 6: Add the corresponding constraint if C is non-empty
+        #         if C:
+        #             violated_cut = self.mdl.model_instance.sum(self.mdl.y[i, j] for i in C) <= len(C) - 1
+                    
+        #             # Safety check: Ensure the constraint is not too restrictive
+        #             #if len(C) > 1:
+        #             ct_cpx = self.linear_ct_to_cplex(violated_cut)
+        #             self.add(ct_cpx[0], ct_cpx[1], ct_cpx[2])
+        #             #print(f"Added cover constraint: {violated_cut}")
+        #             self.cover += 1
+
 
         # Iterate over each vertex j in V
         for j in self.problem_data.V:
@@ -293,35 +341,36 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
             
             # Step 4: Greedily select items for the cover
             for i in sorted_neighbors:
-                # Check the constraint: fi * z_i >= Qmax * yjj + epsilon
-                if self.problem_data.demand[i] >= self.problem_data.Qmax * sol_y.get_value(self.mdl.y[j, j]) + 1e-6:
+                # Calculate the incremental demand if we include item i in the cover
+                current_demand = total_demand + self.problem_data.demand[i]
+                
+                # Check the constraint: total_demand >= Qmax * yjj + epsilon
+                if current_demand >= self.problem_data.Qmax * sol_y.get_value(self.mdl.y[j, j]) + 1e-6:
                     z[i] = 1
-                    total_demand += self.problem_data.demand[i]
-                    max_obj += (1 - sol_y.get_value(self.mdl.y[i, j]))
+                    total_demand = current_demand  # Update the total demand
+                    max_obj = (1 - sol_y.get_value(self.mdl.y[i, j]))  # This is the max of (1 - y_ij) * z_i
+                    
+                    # Stop adding more items since the constraint is satisfied
+                    break
             
             # Step 5: Check if the objective value is less than 1
             if max_obj < 1:
                 # Define the violated cover set C = {i: z_i = 1}
                 C = [i for i in neighbors if z[i] == 1]
-                print(f'cover: {C}')
+                #print(f'cover: {C}')
                 
                 # Step 6: Add the corresponding constraint if C is non-empty
                 if C:
                     violated_cut = self.mdl.model_instance.sum(self.mdl.y[i, j] for i in C) <= len(C) - 1
-                    
-                    # Safety check: Ensure the constraint is not too restrictive
-                    if len(C) > 1:
-                        ct_cpx = self.linear_ct_to_cplex(violated_cut)
-                        self.add(ct_cpx[0], ct_cpx[1], ct_cpx[2])
-                        print(f"Added cover constraint: {violated_cut}")
+                    ct_cpx = self.linear_ct_to_cplex(violated_cut)
+                    self.add(ct_cpx[0], ct_cpx[1], ct_cpx[2])
+                    self.cover += 1
 
-
-
-
+        
 
 
           
-        # Iterate over each vertex j in V
+        # # Iterate over each vertex j in V
         # for j in self.problem_data.V:
         #     # Step 1: Identify neighbors N where y*ij > 0
         #     neighbors = [i for i in self.problem_data.V if sol_y.get_value(self.mdl.y[i, j]) > 0]
@@ -331,7 +380,7 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
         #     max_obj = 0 # Initialize obj
             
         #     # Heuristic: Sort neighbors by (1 - y*ij) in descending order
-        #     for i in sorted(neighbors, key=lambda i: (1 - sol_y.get_value(self.mdl.y[i, j])), reverse=True):
+        #     for i in sorted(neighbors, key=lambda i: (1 - sol_y.get_value(self.mdl.y[i, j])) / self.problem_data.demand[i], reverse=True):
         #         # Check the constraint: fi * zi >= Qmax * yjj + epsilon
         #         if self.problem_data.demand[i] >= self.problem_data.Qmax * sol_y.get_value(self.mdl.y[j, j]) + 1e-6:
         #             z[i] = 1
@@ -343,44 +392,58 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
         
         #         # Define the violated cut C = {i: z_i = 1}
         #         C = [i for i in neighbors if z[i] == 1]
-        #         print(f'cover: {C}')
+        #         #print(f'cover: {C}')
                 
         #         # Ensure C is not empty before adding the constraint
-        #         if C and len(C) > 1:  # Ensure at least one element in C to make the cut meaningful
+        #         if C:# and len(C) > 1:  # Ensure at least one element in C to make the cut meaningful
         #             violated_cut = self.mdl.model_instance.sum(self.mdl.y[i, j] for i in C) <= len(C) - 1
         #             ct_cpx = self.linear_ct_to_cplex(violated_cut)
         #             self.add(ct_cpx[0], ct_cpx[1], ct_cpx[2])
-        #             print(f"Added cover constraint: {violated_cut}")
+        #             #print(f"Added cover constraint: {violated_cut}")
+        #             self.cover += 1
+        
+        
+        
 
-            # max_obj = -float('inf')  # Initialize the objective value to a very low number
-            # best_i = None  # Variable to store the best candidate i
+        # for j in self.problem_data.V:
+        #     # Step 1: Identify neighbors N where y*ij > 0
+        #     neighbors = [i for i in self.problem_data.V if sol_y.get_value(self.mdl.y[i, j]) > 0]
             
-            # # Iterate over neighbors to find the best candidate
-            # for i in neighbors:
-            #     # Calculate the potential objective for this i
-            #     current_obj = (1 - sol_y.get_value(self.mdl.y[i, j])) * 1  # Since z_i will be 1 if chosen
+        #     # Step 2: Initialize variables for the heuristic
+        #     z = {i: 0 for i in neighbors}  # Initialize z_i variables to 0            
+        #     max_obj = -float('inf')  # Initialize the objective value to a very low number
+        #     best_i = None  # Variable to store the best candidate i
+            
+        #     # Step 3: Sort neighbors by the heuristic criteria (e.g., non-increasing (1 - y*ij))
+        #     sorted_neighbors = sorted(neighbors, key=lambda i: (1 - sol_y.get_value(self.mdl.y[i, j])) / self.problem_data.demand[i], reverse=True)
+                       
+        #     # Iterate over neighbors to find the best candidate
+        #     for i in sorted_neighbors:
+        #         # Calculate the potential objective for this i
+        #         current_obj = (1 - sol_y.get_value(self.mdl.y[i, j])) * 1  # Since z_i will be 1 if chosen
                 
-            #     # Check the constraint: fi * 1 >= Qmax * yjj + epsilon
-            #     if self.problem_data.demand[i] >= self.problem_data.Qmax * sol_y.get_value(self.mdl.y[j, j]) + 1e-6:
-            #         # If this objective is better than the previous best, update it
-            #         if current_obj > max_obj:
-            #             max_obj = current_obj
-            #             best_i = i
+        #         # Check the constraint: fi * 1 >= Qmax * yjj + epsilon
+        #         if self.problem_data.demand[i] >= self.problem_data.Qmax * sol_y.get_value(self.mdl.y[j, j]) + 1e-6:
+        #             # If this objective is better than the previous best, update it
+        #             if current_obj > max_obj:
+        #                 max_obj = current_obj
+        #                 best_i = i
         
-            # # Step 3: Check if the objective value is less than 1
-            # if max_obj < 1 and best_i is not None:
-            #     # Define the violated cover set C = {best_i}
-            #     C = [best_i]
-            #     print(f'cover: {C}')
+        #     # Step 3: Check if the objective value is less than 1
+        #     if max_obj < 1 and best_i is not None:
+        #         # Define the violated cover set C = {best_i}
+        #         C = [best_i]
+        #         #print(f'cover: {C}')
         
-            #     if C and len(C) > 1:
-            #         # Add the corresponding constraint
-            #         violated_cut = self.mdl.model_instance.sum(self.mdl.y[i, j] for i in C) <= len(C) - 1
+        #         if C:# and len(C) > 1:
+        #             # Add the corresponding constraint
+        #             violated_cut = self.mdl.model_instance.sum(self.mdl.y[i, j] for i in C) <= len(C) - 1
                     
-            #         # Safety check: Ensure the constraint is not too restrictive
-            #         ct_cpx = self.linear_ct_to_cplex(violated_cut)
-            #         self.add(ct_cpx[0], ct_cpx[1], ct_cpx[2])
-            #         print(f"Added cover constraint: {violated_cut}")
+        #             # Safety check: Ensure the constraint is not too restrictive
+        #             ct_cpx = self.linear_ct_to_cplex(violated_cut)
+        #             self.add(ct_cpx[0], ct_cpx[1], ct_cpx[2])
+        #             #print(f"Added cover constraint: {violated_cut}")
+        #             self.cover += 1
             
             
         # for j in self.problem_data.V:
@@ -401,8 +464,22 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
             
         #         C = [i for i in neighbors if z[i] == 1]
         #         print(f'cover: {C}')
-        #         if C and len(C) > 1:
+        #         if C:# and len(C) > 1:
         #             violated_cut = self.mdl.model_instance.sum(self.mdl.y[i, j] for i in C) <= len(C) - 1
         #             ct_cpx = self.linear_ct_to_cplex(violated_cut)
         #             self.add(ct_cpx[0], ct_cpx[1], ct_cpx[2])
         #             print(f"Added cover constraint: {violated_cut}")
+        #             self.cover += 1
+        
+        
+        # End of callback logic
+        end_time = self.get_time()  # End time
+        elapsed_time = end_time - start_time
+        self.total_time += elapsed_time  # Accumulate time
+
+        # print(f'User callback execution time: {elapsed_time:.4f} seconds')
+        # print(f'Total time in user callback so far: {self.total_time:.4f} seconds')
+
+
+
+
