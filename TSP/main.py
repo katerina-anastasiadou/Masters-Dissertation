@@ -42,19 +42,33 @@ def calculate_percent_ub(solution, cb_user):
         raise ValueError("Optimal value is zero, cannot compute %_UB.")
     
     percent_ub = (ub / optimal_value) * 100
+    print(percent_ub)
     return percent_ub
+
+def format_time(total_seconds):
+    """"
+    Convert a float value representing seconds into hh:mm:ss format.
+    
+    :param total_seconds: Time in seconds as a float.
+    :return: Time in hh:mm:ss format as a string.
+    """
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    return f'{int(hours):02}:{int(minutes):02}:{int(seconds):02}'
 
 n = 40
 dataset = 1
 width = 100
 
-V_values = [50, 75]#, 100]#, 125, 150, 175, 200]
-alpha_values = [3, 5, 7, 9]
-num_instances = 3#10
+V_values = [50]#, 75, 100, 125, 150, 175, 200]
+alpha_values = [3, 5]#, 7, 9]
+num_instances = 3
 
 results = []
+best_sol = []
 
-for V in V_values:
+for V in V_values:    
     for alpha in alpha_values:
         summary_stats = {
             'V': V,
@@ -67,9 +81,14 @@ for V in V_values:
             'sec': 0,
             '2mat': 0,
             'cover': 0,
+            'min gap': 0,
             'nodes': 0,
             'time': 0
         }
+        
+        # Initialize best solution tracking
+        best_instance_index = None
+        best_objective_value = float('inf')  # Assume a large number
         
         for i in range(num_instances):
             try:
@@ -96,10 +115,21 @@ for V in V_values:
                 # Solve the model
                 solution = mdl.model_instance.solve(log_output=True)
                 
+                # After solving, get the total number of nodes examined
+                #num_nodes = solution.get_num_no
+                
                 # Check if a solution is found
                 if solution:
                     # Print the objective value
-                    print("Objective value:", solution.get_objective_value())
+                    #print("Objective value:", solution.get_objective_value())
+                    
+                    current_objective_value = solution.get_objective_value()
+                    print("Objective value:", current_objective_value)
+                    
+                    # Update best instance if current one is better
+                    if current_objective_value < best_objective_value:
+                        best_objective_value = current_objective_value
+                        best_instance_index = i
                 else:
                     print("No solution found.")
                     
@@ -115,16 +145,15 @@ for V in V_values:
                     'sec': None,
                     '2mat': None,
                     'cover': None,
+                    'min gap': None,
                     'nodes': None,
-                    'time': None,
+                    'time': None
                 }
     
                 if solution:
                     visited_vertices = cb_lazy.visited_vertices.union(cb_user.visited_vertices)
                     stats['p_star'] = calculate_p_star(visited_vertices, V)
                     stats['opt'] = solution.get_objective_value()
-                    #stats['%_LB'] = calculate_percent_lb(solution, cb_user)
-                    #stats['%_UB'] = calculate_percent_ub(solution, cb_user)
                     
                     try:
                         stats['%_LB'] = calculate_percent_lb(solution, cb_user)
@@ -139,11 +168,12 @@ for V in V_values:
                     stats['sec'] = cb_lazy.sec + cb_user.sec
                     stats['2mat'] = cb_user.mat2
                     stats['cover'] = cb_user.cover
-                    stats['nodes'] = cb_user.nodes
+                    stats['min gap'] = cb_user.min_gap
+                    stats['nodes'] = cb_user.total_nodes_examined
                     stats['time'] = cb_lazy.total_time + cb_user.total_time
                 
                 # Plot the solution
-                # plot_sol(p,mdl)
+                plot_sol(p,mdl)
                 
                 # Accumulate the results
                 summary_stats['succ'] += stats.get('succ', 0)
@@ -154,6 +184,7 @@ for V in V_values:
                 summary_stats['sec'] += stats.get('sec', 0)
                 summary_stats['2mat'] += stats.get('2mat', 0)
                 summary_stats['cover'] += stats.get('cover', 0)
+                summary_stats['min gap'] += stats.get('min gap', 0)
                 summary_stats['nodes'] += stats.get('nodes', 0)
                 summary_stats['time'] += stats.get('time', 0)
                 
@@ -162,13 +193,19 @@ for V in V_values:
             
             
         for key in summary_stats:
-            if key not in ['V', 'alpha', 'succ']:  # Exclude 'succ' from averaging
+            if key not in ['V', 'alpha', 'succ']:
                 summary_stats[key] = summary_stats[key] / num_instances
                     
         # Ensure 'succ' is an integer
         summary_stats['succ'] = int(summary_stats['succ'])
-
+         
         results.append(summary_stats)
+        
+        # Store the best solution for this (V, alpha) combination
+        if best_instance_index is not None:
+            best_sol.append([V, alpha, best_instance_index, best_objective_value])
+            print(f"Best solution for V={V} and alpha={alpha} is instance {best_instance_index} with objective value {best_objective_value}")
+
         
 # Convert the results into a DataFrame
 df_results = pd.DataFrame(results)
@@ -177,30 +214,23 @@ df_results = pd.DataFrame(results)
 overall_average = df_results.groupby('alpha').mean().reset_index()
 overall_average['V'] = 'Averages'
 
-# Loop through unique V values
-for v_value in df_results['V'].unique():
-    # Filter data for the current V
-    df_v = df_results[df_results['V'] == v_value]
-
-    # Compute the average for this V and add it to the bottom of this block
-    average_v = df_v.mean(numeric_only=True).to_frame().T
-    average_v['V'] = f'Average {v_value}'
-    
-    # Concatenate the block with its average
-    block = pd.concat([df_v, average_v], ignore_index=True)
-    
-    # Add a separator row (empty) if needed
-    separator = pd.DataFrame(columns=df_results.columns)
-    df_final = pd.concat([df_final, block, separator], ignore_index=True)
-
 # Append overall averages to the results
 df_final = pd.concat([df_results, overall_average], ignore_index=True)
 
 # Save to CSV if needed
-df_final.to_csv('experiment_results.csv', index=False)
+df_final.to_csv('experiment_results.csv', index=False, sep=',')
 
 # Alternatively, print the DataFrame directly
 print(df_final)
+
+# Print the best solutions for each (V, alpha) combination
+print("Best solutions across all V and alpha values:")
+for best in best_sol:
+    print(f"V={best[0]}, alpha={best[1]}, best_instance_index={best[2]}, objective_value={best[3]}")
+
+#%% Excel
+
+df_final.to_excel('experiment_results.xlsx', index=False)
 
 #%% Components
 
