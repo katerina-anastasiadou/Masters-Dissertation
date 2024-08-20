@@ -132,6 +132,9 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
         
         start_time = self.get_time()  # Start time
         
+        # Update the total number of nodes examined
+        self.total_nodes_examined = self.get_num_nodes()
+        
         if self.get_current_node_depth() == 0:
             self.mip_gap_root_node = self.get_MIP_relative_gap()
             print(f' mip gap {self.mip_gap_root_node}')
@@ -140,8 +143,6 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
             self.ub = self.get_incumbent_objective_value()
             print(f' lower bound {self.get_best_objective_value()}') 
             self.lb = self.get_best_objective_value()
-        
-        self.total_nodes_examined = self.get_num_nodes()
         
         print('running user callback')
         self.num_calls += 1
@@ -348,7 +349,7 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
                 if current_demand >= self.problem_data.Qmax * sol_y.get_value(self.mdl.y[j, j]) + 1e-6:
                     z[i] = 1
                     total_demand = current_demand  # Update the total demand
-                    max_obj = (1 - sol_y.get_value(self.mdl.y[i, j]))  # This is the max of (1 - y_ij) * z_i
+                    max_obj += (1 - sol_y.get_value(self.mdl.y[i, j]))  # This is the max of (1 - y_ij) * z_i
                     
                     # Stop adding more items since the constraint is satisfied
                     break
@@ -479,7 +480,4 @@ class Callback_user(ConstraintCallbackMixin, UserCutCallback):
 
         # print(f'User callback execution time: {elapsed_time:.4f} seconds')
         # print(f'Total time in user callback so far: {self.total_time:.4f} seconds')
-
-
-
 
