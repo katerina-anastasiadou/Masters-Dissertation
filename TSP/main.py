@@ -61,9 +61,9 @@ n = 40
 dataset = 1
 width = 100
 
-V_values = [50]#, 75, 100, 125, 150, 175, 200]
-alpha_values = [3, 5]#, 7, 9]
-num_instances = 3
+V_values = [50, 75, 100, 125, 150, 175, 200]
+alpha_values = [3, 5, 7, 9]
+num_instances = 5
 
 results = []
 best_sol = []
@@ -173,7 +173,7 @@ for V in V_values:
                     stats['time'] = cb_lazy.total_time + cb_user.total_time
                 
                 # Plot the solution
-                plot_sol(p,mdl)
+                plot_sol(p,mdl,V,alpha,i)
                 
                 # Accumulate the results
                 summary_stats['succ'] += stats.get('succ', 0)
